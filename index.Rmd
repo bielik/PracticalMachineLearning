@@ -1,0 +1,82 @@
+---
+title: "Practical Machine Learning - Exercise type prediction project"
+author: "Martin Bielik"
+date: "October 22, 2017"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Data cleaning - pre-processing
+
+At first, I reduce the complexity of prediction problem by elliminating variables with missing or NA values.
+The Participant names and exercise time stamps are removed as well
+
+```{r read, echo=FALSE, cache=TRUE}
+#training <- read.csv("I:/OneDrive/03_Data/01_Courses/Data Science Specialization/Practical Machine Learning/pml-training.csv")
+#testing <- read.csv("I:/OneDrive/03_Data/01_Courses/Data Science Specialization/Practical Machine Learning/pml-testing.csv")
+training <- read.csv("C:/Users/marti/OneDrive/03_Data/01_Courses/Data Science Specialization/Practical Machine Learning/pml-training.csv")
+testing <- read.csv("C:/Users/marti/OneDrive/03_Data/01_Courses/Data Science Specialization/Practical Machine Learning/pml-testing.csv")
+
+set.seed(988)
+```
+
+```{r pre-processing}
+variable.CullBlank <- as.logical(training[1,] == "")
+variable.CullNA <- is.na(variable.CullBlank)
+variable.cull <- !variable.CullNA & !variable.CullBlank
+
+variable.cull[1:5] <- F
+
+trainingProc <- training[, variable.cull]
+testingProc <- testing[, variable.cull]
+testingProc <- testingProc[,1:(ncol(testingProc)-1)]
+```
+
+The final training data set was redced from the original `r ncol(testing)` to `r ncol(testingProc)`.
+
+## Training
+
+SInce the goal of this porject is prediction and not the ability to interpret and understand the link between sensor data and exercise quality, I adopted one of the most effective and universal machine learning algorithms - Random forest.
+
+The out of the sample error was estimated by 5 fold cross-validation.
+
+###Side note: 
+The Random Fordest training was implemented as parallel computation.
+
+```{r training, echo=TRUE, cache=TRUE, warning=FALSE}
+library(caret)
+library(doParallel)
+library(parallel)
+
+cluster <- makeCluster(detectCores() - 1)
+registerDoParallel(cluster)
+
+fitControl <- trainControl(method = "cv",
+                           number = 5,
+                           allowParallel = TRUE)
+modFit.RF <- train(classe ~ ., data = trainingProc, method = "rf", trControl = fitControl)
+
+stopCluster(cluster)
+registerDoSEQ()
+```
+## Final model
+```{r echo=FALSE}
+modFit.RF$finalModel
+CM <- confusionMatrix(modFit.RF)
+```
+
+The estimated out of sample model accuracy is `r sum(diag(CM$table))`%
+
+## Predicting on test set
+
+```{r predicting, echo=FALSE}
+pred <- predict(modFit.RF, testingProc)
+data.frame("ID-Question" = 1:20, "Prediction" = pred)
+```
+
+After inserting the prediction into the final quiz, all 20 predictions were marked as corret resulting into the accuracy of 100%
